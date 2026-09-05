@@ -1,2 +1,3 @@
 # osu2beatbanger
-Converts .osz to a Beat Banger mod.
+
+Convert 4K osu!mania `.osz` beatmaps into Beat Banger Release-format mods.
