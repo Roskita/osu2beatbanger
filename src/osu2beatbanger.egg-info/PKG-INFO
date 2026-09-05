@@ -1,0 +1,10 @@
+Metadata-Version: 2.4
+Name: osu2beatbanger
+Version: 0.1.0
+Summary: Convert osu!mania 4K maps to Beat Banger Release-format mods.
+Requires-Python: >=3.10
+Description-Content-Type: text/markdown
+
+# osu2beatbanger
+
+Convert 4K osu!mania `.osz` beatmaps into Beat Banger Release-format mods.

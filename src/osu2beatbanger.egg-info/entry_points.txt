@@ -1,0 +1,2 @@
+[console_scripts]
+osu2beatbanger = osu2beatbanger.cli:main
