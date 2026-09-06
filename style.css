@@ -151,7 +151,7 @@ body {
   font-family: var(--font-body);
 }
 .btn-primary {
-  background: var(--bb);
+  background: var(--bb); 
   color: #14210A;
 }
 .btn-primary:hover { filter: brightness(1.08); }
