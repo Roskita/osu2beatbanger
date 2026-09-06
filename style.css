@@ -9,7 +9,7 @@
   --text: #F3EFF6;
   --text-muted: #A79EB3;
   --osu: #FF6FB0;
-  --bb: #2f99c4;
+  --bb: #A970FF;
   --radius: 10px;
 }
 
@@ -151,7 +151,7 @@ body {
   font-family: var(--font-body);
 }
 .btn-primary {
-  background: var(--bb); 
+  background: var(--bb);
   color: #14210A;
 }
 .btn-primary:hover { filter: brightness(1.08); }
