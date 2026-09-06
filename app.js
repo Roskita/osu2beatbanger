@@ -67,16 +67,23 @@
     return result;
   }
 
-  function parseBackgroundFilename(text) {
+  function parseBackgroundEvents(text) {
+    let imageFilename = null;
+    const videoEvents = [];
     for (const line of section(text, "Events")) {
       const parts = line.split(",");
       if (parts.length < 3) continue;
       const eventType = parts[0].trim();
-      if (eventType !== "0" && eventType !== "Background") continue;
-      const filename = parts[2].trim().replace(/^"|"$/g, "");
-      if (filename) return filename;
+      if (eventType === "0" || eventType === "Background") {
+        const filename = parts[2].trim().replace(/^"|"$/g, "");
+        if (filename && !imageFilename) imageFilename = filename;
+      } else if (eventType === "1" || eventType === "Video") {
+        const filename = parts[2].trim().replace(/^"|"$/g, "");
+        const startMs = parseFloat(parts[1]);
+        if (filename) videoEvents.push({ filename, startMs: Number.isNaN(startMs) ? 0 : startMs });
+      }
     }
-    return null;
+    return { imageFilename, videoEvents };
   }
 
   function stripBom(text) {
@@ -144,13 +151,16 @@
     }
     notes.sort((a, b) => a.timeMs - b.timeMs || a.lane - b.lane);
 
+    const backgroundEvents = parseBackgroundEvents(text);
+
     const osuMap = {
       title: metadata.Title || nameHint,
       artist: metadata.Artist || "Unknown Artist",
       creator: metadata.Creator || "Unknown Creator",
       version: metadata.Version || nameHint,
       audioFilename: general.AudioFilename || null,
-      backgroundFilename: parseBackgroundFilename(text),
+      backgroundFilename: backgroundEvents.imageFilename,
+      videoEvents: backgroundEvents.videoEvents,
       mode,
       columns,
       timingPoints,
@@ -180,11 +190,103 @@
     return "[main]\n\ndata=" + JSON.stringify(data, null, 2) + "\n";
   }
 
+  // Beat Bangers Godot objects (Vector2, Color, Rect2, Transform2D, ...) are parsed as
+  // constructor-call syntax like `Vector2(-2, 3)` rather than plain JSON.
+
+  function convertGodotConstructorsToJson(text) {
+    let result = "";
+    const n = text.length;
+
+    function readString(start) {
+      let j = start + 1;
+      while (j < n) {
+        if (text[j] === "\\") { j += 2; continue; }
+        if (text[j] === '"') { j++; break; }
+        j++;
+      }
+      return text.slice(start, j);
+    }
+
+    function findMatchingParen(openIdx) {
+      let depth = 0;
+      let j = openIdx;
+      while (j < n) {
+        const ch = text[j];
+        if (ch === '"') { j += readString(j).length; continue; }
+        if (ch === "(") depth++;
+        else if (ch === ")") {
+          depth--;
+          if (depth === 0) return j;
+        }
+        j++;
+      }
+      return -1;
+    }
+
+    let i = 0;
+    while (i < n) {
+      const ch = text[i];
+      if (ch === '"') {
+        const s = readString(i);
+        result += s;
+        i += s.length;
+        continue;
+      }
+      const idMatch = /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(i));
+      if (idMatch && text[i + idMatch[0].length] === "(") {
+        const openIdx = i + idMatch[0].length;
+        const closeIdx = findMatchingParen(openIdx);
+        if (closeIdx !== -1) {
+          const inner = text.slice(openIdx + 1, closeIdx);
+          result += "[" + convertGodotConstructorsToJson(inner) + "]";
+          i = closeIdx + 1;
+          continue;
+        }
+      }
+      result += ch;
+      i++;
+    }
+    return result;
+  }
+
   function loadCfgData(text) {
     const marker = "data=";
     const idx = text.indexOf(marker);
     if (idx < 0) throw new Error("cfg file does not contain a [main] data= value");
-    const raw = text.slice(idx + marker.length).trim();
+
+    let start = idx + marker.length;
+    while (start < text.length && /\s/.test(text[start])) start++;
+
+    const openChar = text[start];
+    const closeChar = openChar === "{" ? "}" : openChar === "[" ? "]" : null;
+    if (!closeChar) {
+      throw new Error("cfg file's data= value is not a JSON object or array");
+    }
+
+    let depth = 0;
+    let inString = false;
+    let escapeNext = false;
+    let end = -1;
+    for (let i = start; i < text.length; i++) {
+      const ch = text[i];
+      if (inString) {
+        if (escapeNext) escapeNext = false;
+        else if (ch === "\\") escapeNext = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') { inString = true; continue; }
+      if (ch === openChar) depth++;
+      else if (ch === closeChar) {
+        depth--;
+        if (depth === 0) { end = i; break; }
+      }
+    }
+    if (end < 0) {
+      throw new Error("cfg file's data= value has unbalanced braces/brackets");
+    }
+
+    const raw = convertGodotConstructorsToJson(text.slice(start, end + 1));
     return JSON.parse(raw);
   }
 
@@ -315,6 +417,23 @@
     return candidates[0];
   }
 
+  async function findVideoEntry(zip, declaredFilename) {
+    if (declaredFilename) {
+      const entry = await findEntryByBasename(zip, declaredFilename, { recursive: true });
+      if (entry) return entry;
+    }
+    const candidates = Object.values(zip.files).filter(
+      (f) => !f.dir && /\.(avi|flv|mp4|m4v|mov|wmv|mpg|mpeg|ogv|webm|mkv)$/i.test(f.name)
+    );
+    if (!candidates.length) return null;
+    candidates.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+    return candidates[0];
+  }
+
+  // Beat Banger's video player expects Ogg Theora (.ogv); anything else was copied
+  // over as-is (no in-browser transcoding available) and may not play back correctly.
+  const BB_VIDEO_EXT_RE = /\.ogv$/i;
+
   async function convertOszToBB(file, JSZip, onWarning, options) {
     options = options || {};
     const includeBackground = options.includeBackground !== false;
@@ -344,6 +463,28 @@
     const inputStem = basename(file.name || "map").replace(/\.[^.]+$/, "");
     const modName = sanitizeFilename(first.title || inputStem);
 
+    const warn = typeof onWarning === "function" ? onWarning : () => {};
+
+    let videoEntry = null;
+    let videoStartMs = 0;
+    const videoEvents = first.videoEvents || [];
+    if (videoEvents.length) {
+      videoEntry = await findVideoEntry(inputZip, videoEvents[0].filename);
+      videoStartMs = videoEvents[0].startMs;
+      if (!videoEntry) {
+        warn(
+          `This beatmap references a video background ("${videoEvents[0].filename}") ` +
+            "that couldn't be found in the mapset, so it wasn't included."
+        );
+      } else if (!BB_VIDEO_EXT_RE.test(videoEntry.name)) {
+        warn(
+          `This beatmap's video (${basename(videoEntry.name)}) isn't Ogg Theora (.ogv), ` +
+            "which is what Beat Banger's video player expects — it was copied into the mod " +
+            "as-is, but it may not play back correctly without converting it first."
+        );
+      }
+    }
+
     if (options.mirrorNotes) {
       for (const m of parsedMaps) {
         for (const n of m.notes) n.lane = mirrorLane(n.lane);
@@ -356,7 +497,7 @@
     const audioDir = level.folder("audio");
     const configDir = level.folder("config");
     const imagesDir = level.folder("images");
-    level.folder("video");
+    const videoDir = level.folder("video");
 
     // sorts diff by note count, imperfect but good enough lol
     function noteCount(osuMap) {
@@ -413,12 +554,17 @@
     }
 
     let backgroundName = null;
+    // A PNG re-encode (via canvas, undimmed) of the resolved background, reused below
+    // as the mod's splash/thumbnail art instead of the generic placeholder logos.
+    let backgroundArtBytes = null;
     if (includeBackground) {
       const backgroundEntry = await findBackgroundEntry(inputZip, first.backgroundFilename);
       if (backgroundEntry) {
-        let bgBytes = await backgroundEntry.async("uint8array");
+        const rawBgBytes = await backgroundEntry.async("uint8array");
+        backgroundArtBytes = await dimImageBytes(rawBgBytes, 0, "full");
+        let bgBytes = rawBgBytes;
         if (dimPercent > 0) {
-          bgBytes = await dimImageBytes(bgBytes, dimPercent, options.dimMode);
+          bgBytes = await dimImageBytes(rawBgBytes, dimPercent, options.dimMode);
           backgroundName = "BG.png";
         } else {
           backgroundName = "BG" + extOf(backgroundEntry.name);
@@ -427,16 +573,26 @@
       }
     }
 
+    let videoFilename = null;
+    if (videoEntry) {
+      videoFilename = basename(videoEntry.name);
+      videoDir.file(videoFilename, await videoEntry.async("uint8array"));
+    }
+
     configDir.file(
       "keyframes.cfg",
       cfgData({
         background: backgroundName ? [{ path: backgroundName, timestamp: 0.0 }] : [],
+        camera: [],
         effects: [],
         loops: [],
         modifiers: [{ bpm: round(bpm, 6), timestamp: 0.0 }],
         shutter: [],
         sound_loop: [],
         sound_oneshot: [],
+        video: videoFilename
+          ? [{ path: videoFilename, timestamp: round(videoStartMs / 1000.0, 6) }]
+          : [],
         voice_bank: [],
       })
     );
@@ -495,10 +651,13 @@
 
     const osuLogo = await loadImage("assets/osu.png");
     const mania = await loadImage("assets/mania.png");
-    
-    root.file("thumb.png", mania);
-    level.file("splash.png", osuLogo);
-    level.file("thumb.png", osuLogo);
+
+    // Use the beatmap's actual background art for splash/thumbnail images when we have
+    // one; only fall back to the generic placeholder logos when there's no background
+    // (or the person unchecked "include background image").
+    root.file("thumb.png", backgroundArtBytes || mania);
+    level.file("splash.png", backgroundArtBytes || osuLogo);
+    level.file("thumb.png", backgroundArtBytes || osuLogo);
     level.file("waveform.png", await makePlaceholderPng(64));
 
     const blob = await out.generateAsync({ type: "blob", compression: "DEFLATE" });
@@ -539,12 +698,27 @@
     return String(v).replace(/\r/g, " ").replace(/\n/g, " ");
   }
 
-  function buildOsuText({ title, artist, creator, version, audioFilename, backgroundFilename, bpm, offsetMs, notes }) {
+  function buildOsuText({
+    title,
+    artist,
+    creator,
+    version,
+    audioFilename,
+    backgroundFilename,
+    videoFilename,
+    videoStartMs,
+    bpm,
+    offsetMs,
+    notes,
+  }) {
     if (bpm <= 0) throw new Error(`Cannot write a .osu file with non-positive bpm=${bpm}`);
     const beatLength = 60000.0 / bpm;
     const sortedNotes = notes.slice().sort((a, b) => a.timeMs - b.timeMs || a.lane - b.lane);
     const hitObjects = sortedNotes.map(hitObjectLine).join("\n");
-    const events = backgroundFilename ? `0,0,"${backgroundFilename}",0,0` : "";
+    const eventLines = [];
+    if (backgroundFilename) eventLines.push(`0,0,"${backgroundFilename}",0,0`);
+    if (videoFilename) eventLines.push(`Video,${Math.round(videoStartMs || 0)},"${videoFilename}"`);
+    const events = eventLines.join("\n");
 
     title = escapeMetadata(title);
     artist = escapeMetadata(artist);
@@ -670,10 +844,32 @@ ${hitObjects}
         throw new Error(`${levelDir}: song_path '${asset.song_path}' not found under audio/`);
       }
 
+      const levelWarnings = [];
+
       let backgroundEntry = null;
       const bgEntries = keyframes.background || [];
       if (bgEntries.length && bgEntries[0].path) {
         backgroundEntry = await resolveAsset(zip, levelDir, "images", bgEntries[0].path);
+      }
+
+      let videoEntry = null;
+      let videoStartMs = 0;
+      const videoEntries = keyframes.video || [];
+      if (videoEntries.length && videoEntries[0].path) {
+        videoEntry = await resolveAsset(zip, levelDir, "video", videoEntries[0].path);
+        videoStartMs = (parseFloat(videoEntries[0].timestamp) || 0) * 1000;
+        if (!videoEntry) {
+          levelWarnings.push(
+            `Video background '${videoEntries[0].path}' referenced in keyframes.cfg was not ` +
+              "found under video/ and was not included."
+          );
+        } else if (!/\.(avi|flv|mp4|m4v|mov|wmv|mpg|mpeg)$/i.test(videoEntry.name)) {
+          levelWarnings.push(
+            `This mod's video (${basename(videoEntry.name)}) isn't in a format osu! reliably ` +
+              "supports for storyboard video (mp4/avi/flv/etc) — it was copied over as-is but " +
+              "may not play back correctly."
+          );
+        }
       }
 
       const chartsRaw = notesCfg.charts || [];
@@ -707,6 +903,12 @@ ${hitObjects}
         osz.file(backgroundName, await backgroundEntry.async("uint8array"));
       }
 
+      let videoFilename = null;
+      if (videoEntry) {
+        videoFilename = basename(videoEntry.name);
+        osz.file(videoFilename, await videoEntry.async("uint8array"));
+      }
+
       for (const chart of charts) {
         const osuText = buildOsuText({
           title: songTitle,
@@ -715,6 +917,8 @@ ${hitObjects}
           version: chart.name,
           audioFilename: audioName,
           backgroundFilename: backgroundName,
+          videoFilename,
+          videoStartMs,
           bpm,
           offsetMs: 0.0, // bb notes.cfg timestamps are already absolute
           notes: chart.notes,
@@ -727,7 +931,12 @@ ${hitObjects}
 
       const oszName = sanitizeFilename(`${songCreator} - ${songTitle}`, levelName) + ".osz";
       const blob = await osz.generateAsync({ type: "blob", compression: "DEFLATE" });
-      outputs.push({ filename: oszName, blob, chartCount: charts.length });
+      outputs.push({
+        filename: oszName,
+        blob,
+        chartCount: charts.length,
+        warning: levelWarnings.length ? levelWarnings.join(" ") : null,
+      });
     }
 
     return outputs;

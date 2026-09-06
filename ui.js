@@ -196,13 +196,13 @@
     try {
       if (kind === "osu") {
         setStatus("Converting osu!mania map to Beat Banger mod…", "working");
-        let warning = null;
-        const result = await BBMania.convertOszToBB(file, JSZip, (w) => { warning = w; }, options);
+        const warnings = [];
+        const result = await BBMania.convertOszToBB(file, JSZip, (w) => { warnings.push(w); }, options);
         setStatus(
           `Converted "${result.modName}" — ${result.chartCount} chart${result.chartCount === 1 ? "" : "s"}.`,
-          warning ? "warning" : null
+          warnings.length ? "warning" : null
         );
-        if (warning) statusArea.textContent += " " + warning;
+        if (warnings.length) statusArea.textContent += " " + warnings.join(" ");
         addResultCard({
           filename: result.filename,
           blob: result.blob,
@@ -211,7 +211,12 @@
       } else {
         setStatus("Converting Beat Banger mod to osu!mania map", "working");
         const results = await BBMania.convertBBToOsz(file, JSZip, options);
-        setStatus(`Converted ${results.length} level${results.length === 1 ? "" : "s"}.`);
+        const warnings = [...new Set(results.map((r) => r.warning).filter(Boolean))];
+        setStatus(
+          `Converted ${results.length} level${results.length === 1 ? "" : "s"}.`,
+          warnings.length ? "warning" : null
+        );
+        if (warnings.length) statusArea.textContent += " " + warnings.join(" ");
         for (const r of results) {
           addResultCard({
             filename: r.filename,
