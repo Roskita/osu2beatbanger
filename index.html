@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Beat Banger ⇄ osu!mania converter</title>
-<meta name="description" content="Convert 4K osu!mania beatmaps into Beat Banger mods, and back — entirely in your browser.">
+<title>Beat Banger Mania</title>
+<meta name="description" content="Convert .osz to and from Beat Banger valid .zip">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Unbounded:wght@500;700;900&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -12,26 +12,13 @@
 </head>
 <body>
 
-<header class="topbar">
-  <div class="wrap topbar-inner">
-    <span class="wordmark">BB<span class="wordmark-arrow">⇄</span>OSU</span>
-    <a class="ghlink" href="#about">how it works</a>
-  </div>
-</header>
-
 <main>
 
   <section class="hero wrap">
-    <div class="lane-strip" aria-hidden="true">
-      <div class="lane-strip-inner" id="laneStrip"></div>
-      <div class="hitline"></div>
-    </div>
-
-    <h1>Move your 4K charts<br>between <span class="hl-osu">osu!mania</span> and <span class="hl-bb">Beat Banger</span>.</h1>
+    
+    <h1><span class="hl-bb">Beat Banger<br></span>↑↓<br><span class="hl-osu">osu!mania</span></h1>
     <p class="hero-sub">
-      Drop in an <code>.osz</code> or a Beat Banger mod, and this page rebuilds
-      it for the other game — timing points, hit objects, lanes, and the
-      folder structure the game itself expects. Nothing leaves your device.
+      Beat Banger mods must be zipped. Conversely, downloaded .zips should be extracted directly to your Beat Banger mods directory.
     </p>
   </section>
 
@@ -44,62 +31,14 @@
           <path d="M6 27v5a4 4 0 0 0 4 4h20a4 4 0 0 0 4-4v-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
         </svg>
       </div>
-      <p class="dz-title">Drop an <strong>.osz</strong> file or a Beat Banger mod <strong>.zip</strong></p>
-      <p class="dz-sub">or click to browse — the direction is detected automatically</p>
+      <p class="dz-title"><strong>Upload</strong> osu!mania beatmap (.osz) / Beat Banger mod (.zip)</p>
     </div>
 
     <div id="statusArea" class="status-area" hidden></div>
     <div id="resultsArea" class="results-area" hidden></div>
   </section>
 
-  <section class="wrap about-section" id="about">
-    <h2>How the formats line up</h2>
-    <div class="map-grid">
-      <div class="map-col">
-        <h3 class="col-head col-head--osu">osu!mania (.osz)</h3>
-        <dl>
-          <dt>Hit objects</dt>
-          <dd>Each note's x-position (0–512) maps to one of 4 lanes; long notes carry an end time.</dd>
-          <dt>Timing point</dt>
-          <dd>The first uninherited timing point sets the BPM used by the whole chart.</dd>
-          <dt>Metadata</dt>
-          <dd>Title / Artist / Creator / Version become the mod's song title, song artist, author, and chart name.</dd>
-          <dt>Events</dt>
-          <dd>The declared background image is carried across as the mod's background.</dd>
-        </dl>
-      </div>
-      <div class="map-arrow" aria-hidden="true">⇄</div>
-      <div class="map-col">
-        <h3 class="col-head col-head--bb">Beat Banger mod</h3>
-        <dl>
-          <dt><code>notes.cfg</code></dt>
-          <dd>Notes as <code>{ input_type, timestamp }</code> pairs, one chart per osu! difficulty found.</dd>
-          <dt><code>keyframes.cfg</code></dt>
-          <dd>Holds the BPM modifier and the background reference for the level.</dd>
-          <dt><code>mod.cfg</code> / <code>act.cfg</code></dt>
-          <dd>Song title, artist, and author, plus a fresh act/level ID.</dd>
-          <dt>Audio &amp; images</dt>
-          <dd>Song file copied as-is; icons and preview art are generated placeholders.</dd>
-        </dl>
-      </div>
-    </div>
-
-    <div class="caveats">
-      <h3>Before you trust the output</h3>
-      <ul>
-        <li>Only <strong>4-key</strong> osu!mania charts are supported — 5K/6K/7K maps are skipped.</li>
-        <li>Charts with a <strong>BPM change mid-song</strong> aren't supported; the target format has no equivalent field, so converting anyway would silently desync notes.</li>
-        <li>Long-note (hold) timing is carried over, but the on-disk format for holds hasn't been confirmed against a real Beat Banger example — double-check them in-game.</li>
-        <li>Icons, splash art, and waveform thumbnails are generated as plain placeholders, since osu! charts don't carry equivalents for those.</li>
-      </ul>
-    </div>
-  </section>
-
 </main>
-
-<footer class="wrap">
-  <p>Runs entirely in your browser — files are read, converted, and zipped locally; nothing is uploaded anywhere.</p>
-</footer>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="app.js"></script>
