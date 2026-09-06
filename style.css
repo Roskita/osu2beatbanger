@@ -1,3 +1,6 @@
+/* ---------------------------------------------------------------------
+   Tokens
+   --------------------------------------------------------------------- */
 :root {
   --bg: #121016;
   --surface: #1B1721;
@@ -14,18 +17,19 @@
 
 html {
   scroll-behavior: smooth;
-  overflow-y: hidden;
 }
 
 body {
   margin: 0;
   background: var(--bg);
+  background-image:
+    radial-gradient(ellipse 900px 500px at 15% -10%, rgba(255,111,176,0.10), transparent 60%),
+    radial-gradient(ellipse 900px 500px at 90% 10%, rgba(198,255,77,0.07), transparent 60%);
   color: var(--text);
   font-family: var(--font-body);
   font-size: 16px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
-  overflow-y: hidden;
 }
 
 .wrap {
@@ -97,6 +101,19 @@ body {
   border: 1px solid var(--line);
   font-size: 0.95rem;
 }
+.status-area.is-error {
+  border-color: #7A3040;
+  background: #241419;
+  color: #FFB3C4;
+}
+.status-area.is-warning {
+  border-color: #6E6320;
+  background: #23200F;
+  color: #F2E58C;
+}
+.status-area.is-working {
+  color: var(--text-muted);
+}
 
 .results-area { margin-top: 18px; display: grid; gap: 10px; }
 
@@ -121,3 +138,29 @@ body {
   font-size: 0.82rem;
   margin-top: 2px;
 }
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  border-radius: 7px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-decoration: none;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  font-family: var(--font-body);
+}
+.btn-primary {
+  background: var(--bb);
+  color: #14210A;
+}
+.btn-primary:hover { filter: brightness(1.08); }
+.btn-ghost {
+  background: transparent;
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.btn-ghost:hover { border-color: var(--text-muted); }
