@@ -64,14 +64,14 @@
     try {
       kind = await BBMania.detectKind(file, JSZip);
     } catch (e) {
-      setStatus(`Couldn't read that file as a zip: ${e.message}`, "error");
+      setStatus(`Couldn't read as zip: ${e.message}`, "error");
       return;
     }
 
     if (kind === "unknown") {
       setStatus(
-        "Couldn't tell what this is — expected either an osu!mania .osz " +
-          "(containing a .osu file) or a Beat Banger mod .zip (containing act.cfg).",
+        "Expected either an osu!mania .osz " +
+          "or a Beat Banger mod .zip (containing act.cfg).",
         "error"
       );
       return;
@@ -79,8 +79,8 @@
 
     setStatus(
       kind === "osu"
-        ? `Detected an osu!mania beatmap (.osz). Set your options and click Convert.`
-        : `Detected a Beat Banger mod (.zip). Click Convert to export it as .osz.`
+        ? `Detected an osu!mania beatmap (.osz).`
+        : `Detected a Beat Banger mod (.zip).`
     );
     showOptions(file, kind);
   }
@@ -101,6 +101,18 @@
     let dimSlider = null;
     let dimRow = null;
     let dimModeRow = null;
+
+    // mirroring
+    const mirrorRow = document.createElement("div");
+    mirrorRow.className = "option-row";
+    mirrorRow.innerHTML = `
+      <label class="checkbox-row">
+        <input type="checkbox" id="mirrorToggle">
+        Mirror notes
+      </label>
+    `;
+    optionsArea.appendChild(mirrorRow);
+    const mirrorToggle = mirrorRow.querySelector("#mirrorToggle");
 
     if (kind === "osu") {
       const bgRow = document.createElement("div");
@@ -182,7 +194,7 @@
 
     try {
       if (kind === "osu") {
-        setStatus("Converting osu!mania map to a Beat Banger mod…", "working");
+        setStatus("Converting osu!mania map to Beat Banger mod…", "working");
         let warning = null;
         const result = await BBMania.convertOszToBB(file, JSZip, (w) => { warning = w; }, options);
         setStatus(
@@ -196,7 +208,7 @@
           meta: "Beat Banger mod — unzip into your mods folder",
         });
       } else {
-        setStatus("Converting Beat Banger mod to osu!mania map(s)…", "working");
+        setStatus("Converting Beat Banger mod to osu!mania map", "working");
         const results = await BBMania.convertBBToOsz(file, JSZip);
         setStatus(`Converted ${results.length} level${results.length === 1 ? "" : "s"}.`);
         for (const r of results) {
@@ -212,50 +224,16 @@
     }
   }
 
-  // --- wiring ---
+  // uploading
   dropzone.addEventListener("click", () => fileInput.click());
-  dropzone.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); }
-  });
-
+  
   fileInput.addEventListener("change", () => {
     if (fileInput.files[0]) handleFile(fileInput.files[0]);
   });
 
-  ["dragenter", "dragover"].forEach((evt) =>
-    dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      dropzone.classList.add("dragover");
-    })
-  );
-  ["dragleave", "drop"].forEach((evt) =>
-    dropzone.addEventListener(evt, (e) => {
-      e.preventDefault();
-      dropzone.classList.remove("dragover");
-    })
-  );
   dropzone.addEventListener("drop", (e) => {
     const file = e.dataTransfer.files && e.dataTransfer.files[0];
     if (file) handleFile(file);
   });
 
-  // --- decorative lane-strip animation (4 lanes, staggered falling notes) ---
-  (function buildLaneStrip() {
-    const el = document.getElementById("laneStrip");
-    if (!el) return;
-    const colors = ["#FF6FB0", "#FF6FB0", "#C6FF4D", "#C6FF4D"];
-    for (let lane = 0; lane < 4; lane++) {
-      const laneEl = document.createElement("div");
-      laneEl.className = "lane";
-      const noteCount = 2;
-      for (let i = 0; i < noteCount; i++) {
-        const note = document.createElement("div");
-        note.className = "note";
-        note.style.background = colors[lane];
-        note.style.animationDelay = `${lane * 0.35 + i * 1.2}s`;
-        laneEl.appendChild(note);
-      }
-      el.appendChild(laneEl);
-    }
-  })();
 })();

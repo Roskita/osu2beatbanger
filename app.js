@@ -256,6 +256,11 @@
     });
   }
 
+  // mirror a map upon conversion
+  function mirrorLane(lane) {
+    return 3 - Math.max(0, Math.min(3, lane));
+  }
+
   // osu_to_bb.py :: convert an osu!mania .osz -> a Beat Banger mod .zip
 
   function laneNote(note) {
@@ -326,7 +331,7 @@
       if (mode === 3 && columns === 4) maps.push(entry);
     }
     if (!maps.length) {
-      throw new Error("No osu!mania 4K (.osu) maps were found.");
+      throw new Error("No 4K maps found, only 4K is valid in Beat Banger");
     }
     maps.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
 
@@ -339,6 +344,12 @@
     const inputStem = basename(file.name || "map").replace(/\.[^.]+$/, "");
     const modName = sanitizeFilename(first.title || inputStem);
 
+    if (options.mirrorNotes) {
+      for (const m of parsedMaps) {
+        for (const n of m.notes) n.lane = mirrorLane(n.lane);
+      }
+    }
+
     const out = new JSZip();
     const root = out.folder(modName);
     const level = root.folder("default");
@@ -347,10 +358,16 @@
     const imagesDir = level.folder("images");
     level.folder("video");
 
+    // sorts diff by note count, imperfect but good enough lol
+    function noteCount(osuMap) {
+      return osuMap.notes.length;
+    }
+    const orderedMaps = parsedMaps.slice().sort((a, b) => noteCount(a) - noteCount(b));
+    
     const charts = [];
     let anyHolds = false;
-    for (let i = 0; i < parsedMaps.length; i++) {
-      const osuMap = parsedMaps[i];
+    for (let i = 0; i < orderedMaps.length; i++) {
+      const osuMap = orderedMaps[i];
       charts.push({
         icon: `icon${i}.png`,
         name: osuMap.version,
@@ -655,6 +672,12 @@ ${hitObjects}
         icon: c.icon || "icon0.png",
         notes: (c.notes || []).map(noteFromDict),
       }));
+
+      if (options.mirrorNotes) {
+        for (const chart of charts) {
+          for (const n of chart.notes) n.lane = mirrorLane(n.lane);
+        }
+      }
 
       const songCreator = modCfg.song_creator || "Unknown Artist";
       const songTitle = modCfg.song_title || levelName;
