@@ -1,3 +1,3 @@
 # Beat Banger Mania
 
-Convert 4K osu!mania `.osz` beatmaps into Beat Banger Release format mods.
+Convert 4K osu!mania .osz to and from Beat Banger Release mods.

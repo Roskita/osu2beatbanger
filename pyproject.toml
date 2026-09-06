@@ -1,17 +1,18 @@
 [build-system]
-requires = ["setuptools>=68"]
+requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "osu2beatbanger"
-version = "0.1.0"
-description = "Convert osu!mania 4K maps to Beat Banger Release-format mods."
-readme = "README.md"
+name = "beatbangermania"
+version = "0.2.0"
 requires-python = ">=3.10"
-dependencies = []
+dependencies = ["Pillow"]
+
+[project.optional-dependencies]
+test = ["pytest"]
 
 [project.scripts]
-osu2beatbanger = "osu2beatbanger.cli:main"
+beatbangermania = "beatbangermania.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
