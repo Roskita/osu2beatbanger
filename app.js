@@ -304,8 +304,6 @@
     try {
       return JSON.parse(raw);
     } catch (e) {
-      // Surface *where* in the (already-normalized) value parsing broke, since the
-      // bare browser JSON.parse error alone doesn't say which cfg file it came from.
       const posMatch = /column (\d+)/.exec(e.message);
       let snippet = "";
       if (posMatch) {
@@ -396,8 +394,6 @@
     return 3 - Math.max(0, Math.min(3, lane));
   }
 
-  // osu_to_bb.py :: convert an osu!mania .osz -> a Beat Banger mod .zip
-
   function laneNote(note) {
     const result = {
       input_type: note.lane,
@@ -463,8 +459,7 @@
     return candidates[0];
   }
 
-  // Beat Banger's video player expects Ogg Theora (.ogv); anything else was copied
-  // over as-is and may not play back correctly.
+  // Beat Banger's video player expects Ogg Theora (.ogv); 
   const BB_VIDEO_EXT_RE = /\.ogv$/i;
 
   async function convertOszToBB(file, JSZip, onWarning, options) {
