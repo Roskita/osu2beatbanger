@@ -887,6 +887,7 @@ ${hitObjects}
         backgroundEntry = await resolveAsset(zip, levelDir, "images", bgEntries[0].path);
       }
 
+      //give up video conversion since beat banger animations use image grids
       let videoEntry = null;
       let videoStartMs = 0;
       const videoEntries = keyframes.video || [];
