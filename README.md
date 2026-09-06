@@ -1,22 +1,5 @@
-# Beat Banger ⇄ osu!mania converter (static site)
+# static webpage version :3 
 
-A fully client-side web page, ported from the `beatbangermania` Python
-tool. Drop in a 4K osu!mania `.osz` and it builds a Beat Banger mod `.zip`,
-or drop in a Beat Banger mod and it builds `.osz`(s) back — all in the
-browser, nothing uploaded anywhere.
-
-## Files
-
-- `index.html` — page structure and content
-- `style.css` — styling
-- `app.js` — the conversion logic itself (parsing `.osu`, building/reading
-  Beat Banger's `cfg` files, zipping), ported 1:1 from the Python source
-- `ui.js` — wires the drop zone / file picker to `app.js` and renders results
-
-The only external dependency is [JSZip](https://stuk.github.io/jszip/),
-loaded from a CDN in `index.html`.
-
-## Run it locally
 
 No build step needed — just serve the folder statically, e.g.:
 
