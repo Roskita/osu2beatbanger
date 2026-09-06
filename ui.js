@@ -4,7 +4,11 @@
   const dropzone = document.getElementById("dropzone");
   const fileInput = document.getElementById("fileInput");
   const statusArea = document.getElementById("statusArea");
+  const optionsArea = document.getElementById("optionsArea");
   const resultsArea = document.getElementById("resultsArea");
+
+  let pendingFile = null;
+  let pendingKind = null;
 
   function setStatus(message, kind) {
     if (!message) {
@@ -21,6 +25,13 @@
   function clearResults() {
     resultsArea.hidden = true;
     resultsArea.innerHTML = "";
+  }
+
+  function clearOptions() {
+    optionsArea.hidden = true;
+    optionsArea.innerHTML = "";
+    pendingFile = null;
+    pendingKind = null;
   }
 
   function addResultCard({ filename, blob, meta }) {
@@ -46,6 +57,7 @@
 
   async function handleFile(file) {
     clearResults();
+    clearOptions();
     setStatus(`Reading ${file.name}…`, "working");
 
     let kind;
@@ -65,11 +77,114 @@
       return;
     }
 
+    setStatus(
+      kind === "osu"
+        ? `Detected an osu!mania beatmap (.osz). Set your options and click Convert.`
+        : `Detected a Beat Banger mod (.zip). Click Convert to export it as .osz.`
+    );
+    showOptions(file, kind);
+  }
+
+  function showOptions(file, kind) {
+    pendingFile = file;
+    pendingKind = kind;
+
+    optionsArea.hidden = false;
+    optionsArea.innerHTML = "";
+
+    const fileInfo = document.createElement("div");
+    fileInfo.className = "options-file";
+    fileInfo.innerHTML = `File: <strong>${escapeHtml(file.name)}</strong>`;
+    optionsArea.appendChild(fileInfo);
+
+    let bgToggle = null;
+    let dimSlider = null;
+    let dimRow = null;
+    let dimModeRow = null;
+
+    if (kind === "osu") {
+      const bgRow = document.createElement("div");
+      bgRow.className = "option-row";
+      bgRow.innerHTML = `
+        <label class="checkbox-row">
+          <input type="checkbox" id="bgToggle">
+          Include background image
+        </label>
+      `;
+      optionsArea.appendChild(bgRow);
+      bgToggle = bgRow.querySelector("#bgToggle");
+
+      dimModeRow = document.createElement("div");
+      dimModeRow.className = "option-row dim-mode-row";
+      dimModeRow.hidden = true;
+      dimModeRow.innerHTML = `
+        <label class="radio-row">
+          <input type="radio" name="dimMode" value="full" checked>
+          Dim entire background
+        </label>
+        <label class="radio-row">
+          <input type="radio" name="dimMode" value="strip">
+          Dim center strip 
+        </label>
+      `;
+      optionsArea.appendChild(dimModeRow);
+
+      dimRow = document.createElement("div");
+      dimRow.className = "slider-row";
+      dimRow.hidden = true;
+      dimRow.innerHTML = `
+        <label for="dimSlider">Dim amount <span id="dimValue">0%</span></label>
+        <input type="range" id="dimSlider" min="0" max="100" value="0" step="1">
+      `;
+      optionsArea.appendChild(dimRow);
+      dimSlider = dimRow.querySelector("#dimSlider");
+      const dimValueLabel = dimRow.querySelector("#dimValue");
+
+      bgToggle.addEventListener("change", () => {
+        dimModeRow.hidden = !bgToggle.checked;
+        dimRow.hidden = !bgToggle.checked;
+      });
+      dimSlider.addEventListener("input", () => {
+        dimValueLabel.textContent = `${dimSlider.value}%`;
+      });
+    }
+
+    const actionsRow = document.createElement("div");
+    actionsRow.className = "options-actions";
+    actionsRow.innerHTML = `
+      <button class="btn btn-ghost" id="cancelBtn" type="button">Cancel</button>
+      <button class="btn btn-primary" id="convertBtn" type="button">Convert</button>
+    `;
+    optionsArea.appendChild(actionsRow);
+
+    actionsRow.querySelector("#cancelBtn").addEventListener("click", () => {
+      clearOptions();
+      setStatus(null);
+    });
+
+    actionsRow.querySelector("#convertBtn").addEventListener("click", () => {
+      const options = {};
+      if (kind === "osu") {
+        options.includeBackground = !!bgToggle.checked;
+        options.dimPercent = bgToggle.checked ? parseInt(dimSlider.value, 10) : 0;
+        const modeInput = bgToggle.checked
+          ? optionsArea.querySelector('input[name="dimMode"]:checked')
+          : null;
+        options.dimMode = modeInput ? modeInput.value : "full";
+      }
+      runConversion(pendingFile, pendingKind, options);
+    });
+  }
+
+  async function runConversion(file, kind, options) {
+    clearResults();
+    clearOptions();
+
     try {
       if (kind === "osu") {
         setStatus("Converting osu!mania map to a Beat Banger mod…", "working");
         let warning = null;
-        const result = await BBMania.convertOszToBB(file, JSZip, (w) => { warning = w; });
+        const result = await BBMania.convertOszToBB(file, JSZip, (w) => { warning = w; }, options);
         setStatus(
           `Converted "${result.modName}" — ${result.chartCount} chart${result.chartCount === 1 ? "" : "s"}.`,
           warning ? "warning" : null

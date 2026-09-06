@@ -208,6 +208,54 @@
     });
   }
 
+  function dimImageBytes(bytes, dimPercent, mode) {
+    mode = mode === "strip" ? "strip" : "full";
+    return new Promise((resolve, reject) => {
+      let url;
+      try {
+        const blob = new Blob([bytes]);
+        url = URL.createObjectURL(blob);
+        const img = new Image();
+        img.onload = () => {
+          try {
+            const canvas = document.createElement("canvas");
+            canvas.width = img.naturalWidth || 1;
+            canvas.height = img.naturalHeight || 1;
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(img, 0, 0);
+            const alpha = Math.min(1, Math.max(0, dimPercent / 100));
+            if (alpha > 0) {
+              ctx.fillStyle = `rgba(0,0,0,${alpha})`;
+              if (mode === "strip") {
+                const stripWidth = Math.min(450, canvas.width);
+                const x = Math.max(0, (canvas.width - stripWidth) / 2);
+                ctx.fillRect(x, 0, stripWidth, canvas.height);
+              } else {
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+              }
+            }
+            canvas.toBlob((outBlob) => {
+              URL.revokeObjectURL(url);
+              if (!outBlob) return reject(new Error("canvas.toBlob failed while dimming background"));
+              outBlob.arrayBuffer().then((buf) => resolve(new Uint8Array(buf))).catch(reject);
+            }, "image/png");
+          } catch (e) {
+            URL.revokeObjectURL(url);
+            reject(e);
+          }
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(url);
+          reject(new Error("Failed to load background image for dimming"));
+        };
+        img.src = url;
+      } catch (e) {
+        if (url) URL.revokeObjectURL(url);
+        reject(e);
+      }
+    });
+  }
+
   // osu_to_bb.py :: convert an osu!mania .osz -> a Beat Banger mod .zip
 
   function laneNote(note) {
@@ -262,7 +310,10 @@
     return candidates[0];
   }
 
-  async function convertOszToBB(file, JSZip, onWarning) {
+  async function convertOszToBB(file, JSZip, onWarning, options) {
+    options = options || {};
+    const includeBackground = options.includeBackground !== false;
+    const dimPercent = Math.min(100, Math.max(0, options.dimPercent || 0));
     const inputZip = await JSZip.loadAsync(file);
 
     const osuEntries = Object.values(inputZip.files).filter(
@@ -344,11 +395,19 @@
       );
     }
 
-    const backgroundEntry = await findBackgroundEntry(inputZip, first.backgroundFilename);
     let backgroundName = null;
-    if (backgroundEntry) {
-      backgroundName = "BG" + extOf(backgroundEntry.name);
-      imagesDir.file(backgroundName, await backgroundEntry.async("uint8array"));
+    if (includeBackground) {
+      const backgroundEntry = await findBackgroundEntry(inputZip, first.backgroundFilename);
+      if (backgroundEntry) {
+        let bgBytes = await backgroundEntry.async("uint8array");
+        if (dimPercent > 0) {
+          bgBytes = await dimImageBytes(bgBytes, dimPercent, options.dimMode);
+          backgroundName = "BG.png";
+        } else {
+          backgroundName = "BG" + extOf(backgroundEntry.name);
+        }
+        imagesDir.file(backgroundName, bgBytes);
+      }
     }
 
     configDir.file(
@@ -382,7 +441,7 @@
     configDir.file(
       "mod.cfg",
       cfgData({
-        description: `Converted from osu!mania: ${modName}`,
+        description: `Converted from osu!mania`,
         preview_timestamp: 0.0,
         song_creator: first.artist,
         song_title: first.title,
@@ -399,7 +458,7 @@
     root.file(
       "act.cfg",
       cfgData({
-        act_description: `Converted osu!mania map: ${modName}`,
+        act_description: `Converted from osu!mania`,
         act_id: actId,
         act_index: 0,
         act_name: modName,
