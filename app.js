@@ -309,14 +309,7 @@
       anyHolds = anyHolds || osuMap.notes.some((n) => n.isHold);
       imagesDir.file(`icon${i}.png`, await makePlaceholderPng(32));
     }
-    if (anyHolds && onWarning) {
-      onWarning(
-        "This map contains hold notes. Their Beat Banger format (note_modifier=3 + " +
-          "hold_end_timestamp) is unconfirmed against a real example — verify holds " +
-          "actually work in-game before trusting this output."
-      );
-    }
-
+    
     configDir.file("notes.cfg", cfgData({ charts }));
 
     const audioEntry = await findAudioEntry(inputZip, first.audioFilename);
