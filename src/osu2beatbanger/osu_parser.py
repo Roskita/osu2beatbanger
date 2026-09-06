@@ -33,6 +33,34 @@ def _kv(lines: list[str]) -> dict[str, str]:
     return result
 
 
+def _parse_int(value: str, default: int) -> int:
+    """Some .osu exports write integer-valued fields (CircleSize, Mode) as
+    floats ("4.0"). A bare int() crashes on those. Fall back through float()
+    before giving up, so a formatting quirk doesn't hard-crash the convert."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        pass
+    try:
+        return int(float(value))
+    except (TypeError, ValueError):
+        return default
+
+
+def _parse_background_filename(text: str) -> str | None:
+    for line in _section(text, "Events"):
+        parts = line.split(",")
+        if len(parts) < 3:
+            continue
+        event_type = parts[0].strip()
+        if event_type not in ("0", "Background"):
+            continue
+        filename = parts[2].strip().strip('"')
+        if filename:
+            return filename
+    return None
+
+
 def parse_osu(path: str | Path) -> OsuMap:
     path = Path(path)
     text = path.read_text(encoding="utf-8-sig", errors="replace")
@@ -41,8 +69,8 @@ def parse_osu(path: str | Path) -> OsuMap:
     metadata = _kv(_section(text, "Metadata"))
     difficulty = _kv(_section(text, "Difficulty"))
 
-    mode = int(general.get("Mode", "0"))
-    columns = int(difficulty.get("CircleSize", "4"))
+    mode = _parse_int(general.get("Mode", "0"), default=0)
+    columns = _parse_int(difficulty.get("CircleSize", "4"), default=4)
 
     if mode != 3:
         raise ValueError(f"{path.name}: not an osu!mania map (Mode: {mode})")
@@ -82,7 +110,7 @@ def parse_osu(path: str | Path) -> OsuMap:
 
         lane = min(3, max(0, int(x / (512 / 4))))
 
-        # Mania hold: type bit 7 (128) is set. The end time is before the
+        # Mania hold: type bit 7  is set. The end time is before the
         # first colon in the fifth/parameter field.
         end_ms = None
         if object_type & 128:
@@ -106,6 +134,7 @@ def parse_osu(path: str | Path) -> OsuMap:
         artist=metadata.get("Artist", "Unknown Artist"),
         version=metadata.get("Version", path.stem),
         audio_filename=general.get("AudioFilename"),
+        background_filename=_parse_background_filename(text),
         mode=mode,
         columns=columns,
         timing_points=timing_points,
@@ -123,6 +152,8 @@ def find_4k_maps(extracted_dir: str | Path) -> list[Path]:
             continue
         general = _kv(_section(text, "General"))
         difficulty = _kv(_section(text, "Difficulty"))
-        if general.get("Mode") == "3" and difficulty.get("CircleSize") == "4":
+        mode = _parse_int(general.get("Mode", "-1"), default=-1)
+        columns = _parse_int(difficulty.get("CircleSize", "-1"), default=-1)
+        if mode == 3 and columns == 4:
             result.append(path)
     return sorted(result)
