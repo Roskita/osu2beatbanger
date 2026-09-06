@@ -1,7 +1,5 @@
-/* ---------------------------------------------------------------------
-   Tokens
-   --------------------------------------------------------------------- */
 :root {
+  --font-stripe: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --bg: #121016;
   --surface: #1B1721;
   --surface-2: #221D2A;
@@ -36,7 +34,8 @@ body {
 }
 
 .hero h1 {
-  font-family: var(--font-display);
+  font-family: var(--font-stripe);
+  text-align: center;
   font-weight: 700;
   font-size: clamp(1.7rem, 4vw, 2.5rem);
   line-height: 1.25;
