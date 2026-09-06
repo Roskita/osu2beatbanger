@@ -190,9 +190,12 @@
     return "[main]\n\ndata=" + JSON.stringify(data, null, 2) + "\n";
   }
 
-  // Beat Bangers Godot objects (Vector2, Color, Rect2, Transform2D, ...) are parsed as
-  // constructor-call syntax like `Vector2(-2, 3)` rather than plain JSON.
-
+  // Beat Banger's cfg files are written by Godot/GDScript, which serializes typed
+  // values (Vector2, Color, Rect2, Transform2D, ...) as constructor-call syntax like
+  // `Vector2(-2, 3)` rather than plain JSON. Turn any such `Identifier(...)` into a
+  // JSON array `[...]` so the rest of the value can be parsed as ordinary JSON.
+  // Handles nesting (e.g. a Transform2D wrapping Vector2s) and leaves quoted string
+  // contents untouched.
   function convertGodotConstructorsToJson(text) {
     let result = "";
     const n = text.length;
@@ -233,13 +236,23 @@
         continue;
       }
       const idMatch = /^[A-Za-z_][A-Za-z0-9_]*/.exec(text.slice(i));
-      if (idMatch && text[i + idMatch[0].length] === "(") {
-        const openIdx = i + idMatch[0].length;
-        const closeIdx = findMatchingParen(openIdx);
-        if (closeIdx !== -1) {
-          const inner = text.slice(openIdx + 1, closeIdx);
-          result += "[" + convertGodotConstructorsToJson(inner) + "]";
-          i = closeIdx + 1;
+      if (idMatch) {
+        const name = idMatch[0];
+        const nextChar = text[i + name.length];
+        if (nextChar === "(") {
+          const openIdx = i + name.length;
+          const closeIdx = findMatchingParen(openIdx);
+          if (closeIdx !== -1) {
+            const inner = text.slice(openIdx + 1, closeIdx);
+            result += "[" + convertGodotConstructorsToJson(inner) + "]";
+            i = closeIdx + 1;
+            continue;
+          }
+        } else if (name === "True" || name === "False" || name === "None") {
+          // Some cfg values use Python-style bare keywords instead of JSON's
+          // lowercase true/false/null.
+          result += name === "True" ? "true" : name === "False" ? "false" : "null";
+          i += name.length;
           continue;
         }
       }
@@ -249,10 +262,11 @@
     return result;
   }
 
-  function loadCfgData(text) {
+  function loadCfgData(text, sourceLabel) {
+    sourceLabel = sourceLabel || "cfg file";
     const marker = "data=";
     const idx = text.indexOf(marker);
-    if (idx < 0) throw new Error("cfg file does not contain a [main] data= value");
+    if (idx < 0) throw new Error(`${sourceLabel}: does not contain a [main] data= value`);
 
     let start = idx + marker.length;
     while (start < text.length && /\s/.test(text[start])) start++;
@@ -260,7 +274,7 @@
     const openChar = text[start];
     const closeChar = openChar === "{" ? "}" : openChar === "[" ? "]" : null;
     if (!closeChar) {
-      throw new Error("cfg file's data= value is not a JSON object or array");
+      throw new Error(`${sourceLabel}: data= value is not a JSON object or array`);
     }
 
     let depth = 0;
@@ -283,11 +297,30 @@
       }
     }
     if (end < 0) {
-      throw new Error("cfg file's data= value has unbalanced braces/brackets");
+      throw new Error(`${sourceLabel}: data= value has unbalanced braces/brackets`);
     }
 
     const raw = convertGodotConstructorsToJson(text.slice(start, end + 1));
-    return JSON.parse(raw);
+    try {
+      return JSON.parse(raw);
+    } catch (e) {
+      // Surface *where* in the (already-normalized) value parsing broke, since the
+      // bare browser JSON.parse error alone doesn't say which cfg file it came from.
+      const posMatch = /column (\d+)/.exec(e.message);
+      let snippet = "";
+      if (posMatch) {
+        const col = parseInt(posMatch[1], 10);
+        const lineMatch = /line (\d+)/.exec(e.message);
+        const lineNo = lineMatch ? parseInt(lineMatch[1], 10) : null;
+        if (lineNo) {
+          const lines = raw.split("\n");
+          const line = lines[lineNo - 1] || "";
+          const around = line.slice(Math.max(0, col - 30), col + 10);
+          snippet = ` — near: ...${around}...`;
+        }
+      }
+      throw new Error(`${sourceLabel}: couldn't parse cfg data as JSON (${e.message})${snippet}`);
+    }
   }
 
   function makePlaceholderPng(size, color) {
@@ -431,7 +464,7 @@
   }
 
   // Beat Banger's video player expects Ogg Theora (.ogv); anything else was copied
-  // over as-is (no in-browser transcoding available) and may not play back correctly.
+  // over as-is and may not play back correctly.
   const BB_VIDEO_EXT_RE = /\.ogv$/i;
 
   async function convertOszToBB(file, JSZip, onWarning, options) {
@@ -479,8 +512,7 @@
       } else if (!BB_VIDEO_EXT_RE.test(videoEntry.name)) {
         warn(
           `This beatmap's video (${basename(videoEntry.name)}) isn't Ogg Theora (.ogv), ` +
-            "which is what Beat Banger's video player expects — it was copied into the mod " +
-            "as-is, but it may not play back correctly without converting it first."
+            "which is what Beat Banger's video player expects so it may not work"
         );
       }
     }
@@ -802,7 +834,7 @@ ${hitObjects}
     actEntries.sort((a, b) => a.name.split("/").length - b.name.split("/").length);
     const actEntry = actEntries[0];
     const modRoot = dirname(actEntry.name); // may be "" if act.cfg is at zip root
-    const actData = loadCfgData(await actEntry.async("string"));
+    const actData = loadCfgData(await actEntry.async("string"), actEntry.name);
 
     const notesCfgEntries = Object.values(zip.files).filter(
       (f) =>
@@ -825,7 +857,10 @@ ${hitObjects}
         }
       }
       const readCfg = async (name) =>
-        loadCfgData(await zip.files[`${levelDir}/config/${name}`].async("string"));
+        loadCfgData(
+          await zip.files[`${levelDir}/config/${name}`].async("string"),
+          `${levelDir}/config/${name}`
+        );
 
       const asset = await readCfg("asset.cfg");
       const settings = await readCfg("settings.cfg");
