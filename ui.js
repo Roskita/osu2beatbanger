@@ -213,7 +213,7 @@
         const results = await BBMania.convertBBToOsz(file, JSZip, options);
         const warnings = [...new Set(results.map((r) => r.warning).filter(Boolean))];
         setStatus(
-          `Converted ${results.length} level${results.length === 1 ? "" : "s"}.`,
+          `Converted to .osz`,
           warnings.length ? "warning" : null
         );
         if (warnings.length) statusArea.textContent += " " + warnings.join(" ");

@@ -898,13 +898,7 @@ ${hitObjects}
             `Video background '${videoEntries[0].path}' referenced in keyframes.cfg was not ` +
               "found under video/ and was not included."
           );
-        } else if (!/\.(avi|flv|mp4|m4v|mov|wmv|mpg|mpeg)$/i.test(videoEntry.name)) {
-          levelWarnings.push(
-            `This mod's video (${basename(videoEntry.name)}) isn't in a format osu! reliably ` +
-              "supports for storyboard video (mp4/avi/flv/etc) — it was copied over as-is but " +
-              "may not play back correctly."
-          );
-        }
+        } 
       }
 
       const chartsRaw = notesCfg.charts || [];
