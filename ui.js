@@ -176,6 +176,7 @@
 
     actionsRow.querySelector("#convertBtn").addEventListener("click", () => {
       const options = {};
+      options.mirrorNotes = !!mirrorToggle.checked;
       if (kind === "osu") {
         options.includeBackground = !!bgToggle.checked;
         options.dimPercent = bgToggle.checked ? parseInt(dimSlider.value, 10) : 0;
@@ -209,7 +210,7 @@
         });
       } else {
         setStatus("Converting Beat Banger mod to osu!mania map", "working");
-        const results = await BBMania.convertBBToOsz(file, JSZip);
+        const results = await BBMania.convertBBToOsz(file, JSZip, options);
         setStatus(`Converted ${results.length} level${results.length === 1 ? "" : "s"}.`);
         for (const r of results) {
           addResultCard({

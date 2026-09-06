@@ -483,9 +483,22 @@
       })
     );
 
-    root.file("thumb.png", await makePlaceholderPng(128));
-    level.file("splash.png", await makePlaceholderPng(256));
-    level.file("thumb.png", await makePlaceholderPng(128));
+    async function loadImage(path) {
+      const response = await fetch(path);
+
+      if (!response.ok) {
+          throw new Error(`Could not load ${path}`);
+      }
+
+      return new Uint8Array(await response.arrayBuffer());
+    }
+
+    const osuLogo = await loadImage("assets/osu.png");
+    const mania = await loadImage("assets/mania.png");
+    
+    root.file("thumb.png", mania);
+    level.file("splash.png", osuLogo);
+    level.file("thumb.png", osuLogo);
     level.file("waveform.png", await makePlaceholderPng(64));
 
     const blob = await out.generateAsync({ type: "blob", compression: "DEFLATE" });
@@ -602,7 +615,8 @@ ${hitObjects}
     return null;
   }
 
-  async function convertBBToOsz(file, JSZip) {
+  async function convertBBToOsz(file, JSZip, options) {
+    options = options || {};
     const zip = await JSZip.loadAsync(file);
 
     const actEntries = Object.values(zip.files).filter(
